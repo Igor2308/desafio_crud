@@ -1,10 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-
 from sqlmodel import Session
 
 from db.db import get_db
-
 from entidades.models import Equipamento
+from dependencies.auth import require_roles
 
 from controllers.equipamento_controller import (
     cadastrar_equipamento,
@@ -18,11 +17,11 @@ equipamento_router = APIRouter()
 
 
 # Cadastra um novo equipamento
-
 @equipamento_router.post("/equipamentos")
 def cadastro_equipamento(
     equipamento: Equipamento,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario=Depends(require_roles("Administrador"))
 ):
     try:
         return cadastrar_equipamento(
@@ -50,10 +49,12 @@ def cadastro_equipamento(
 
 
 # Busca todos os equipamentos
-
 @equipamento_router.get("/equipamentos")
 def buscar_equipamentos_route(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario=Depends(
+        require_roles("Usuário comum", "Gestor", "Administrador")
+    )
 ):
     try:
         return buscar_equipamentos(db)
@@ -66,11 +67,13 @@ def buscar_equipamentos_route(
 
 
 # Busca um equipamento pelo ID
-
 @equipamento_router.get("/equipamentos/{equipamento_id}")
 def buscar_equipamento_route(
     equipamento_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario=Depends(
+        require_roles("Usuário comum", "Gestor", "Administrador")
+    )
 ):
     try:
         return buscar_equipamento(
@@ -92,12 +95,12 @@ def buscar_equipamento_route(
 
 
 # Atualiza um equipamento
-
 @equipamento_router.put("/equipamentos/{equipamento_id}")
 def atualizar_equipamento_route(
     equipamento_id: int,
     equipamento: Equipamento,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario=Depends(require_roles("Administrador"))
 ):
     try:
         return atualizar_equipamento(
@@ -126,11 +129,11 @@ def atualizar_equipamento_route(
 
 
 # Deleta um equipamento
-
 @equipamento_router.delete("/equipamentos/{equipamento_id}")
 def deletar_equipamento_route(
     equipamento_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario=Depends(require_roles("Administrador"))
 ):
     try:
         deletar_equipamento(

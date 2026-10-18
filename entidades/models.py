@@ -1,6 +1,7 @@
 from datetime import datetime
 from sqlalchemy import Column, DateTime, Enum, text, String
 from sqlmodel import SQLModel, Field
+from pydantic import BaseModel, EmailStr
 
 
 class NivelAcesso(SQLModel, table=True):
@@ -164,3 +165,15 @@ class Emprestimo(SQLModel, table=True):
         default=None,
         max_length=150
     )
+
+# Parte de autenticação
+class UsuarioLogin(BaseModel):
+    email: EmailStr
+    senha: str
+
+
+class UsuarioAutenticado(BaseModel):
+    id_usuario: int
+    nome: str
+    email: EmailStr
+    roles: list[str]

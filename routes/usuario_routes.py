@@ -1,12 +1,15 @@
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from sqlmodel import Session
 
 from db.db import get_db
 
-from entidades.models import Usuario
+from entidades.models import Usuario, UsuarioAutenticado
 
 from entidades.schemas import UsuarioResposta
+
+from dependencies.auth import get_current_user, require_roles
 
 from controllers.usuario_controller import (
     cadastrar_usuario,
@@ -19,17 +22,20 @@ from controllers.usuario_controller import (
 usuario_router = APIRouter()
 
 
-# Cadastra um novo usuário
-
+# Cadastra um novo usuário como usuário comum
 @usuario_router.post(
     "/usuarios",
-    response_model=UsuarioResposta
+    response_model=UsuarioResposta,
+    status_code=status.HTTP_201_CREATED
 )
 def cadastro_usuario(
     usuario: Usuario,
     db: Session = Depends(get_db)
 ):
     try:
+        # Impede cadastro público com privilégios elevados
+        usuario.nivel_acesso = 1
+
         return cadastrar_usuario(
             usuario,
             db
@@ -54,14 +60,16 @@ def cadastro_usuario(
         )
 
 
-# Busca todos os usuários
-
+# Lista usuários: somente Administrador
 @usuario_router.get(
     "/usuarios",
     response_model=list[UsuarioResposta]
 )
 def buscar_usuarios_route(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario_atual: UsuarioAutenticado = Depends(
+        require_roles("Administrador")
+    )
 ):
     try:
         return buscar_usuarios(db)
@@ -73,15 +81,17 @@ def buscar_usuarios_route(
         )
 
 
-# Busca um usuário pelo ID
-
+# Consulta um usuário: somente Administrador
 @usuario_router.get(
     "/usuarios/{usuario_id}",
     response_model=UsuarioResposta
 )
 def buscar_usuario_route(
     usuario_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario_atual: UsuarioAutenticado = Depends(
+        require_roles("Administrador")
+    )
 ):
     try:
         return buscar_usuario(
@@ -102,8 +112,7 @@ def buscar_usuario_route(
         )
 
 
-# Atualiza um usuário
-
+# Atualiza um usuário: somente Administrador
 @usuario_router.put(
     "/usuarios/{usuario_id}",
     response_model=UsuarioResposta
@@ -111,7 +120,10 @@ def buscar_usuario_route(
 def atualizar_usuario_route(
     usuario_id: int,
     usuario: Usuario,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario_atual: UsuarioAutenticado = Depends(
+        require_roles("Administrador")
+    )
 ):
     try:
         return atualizar_usuario(
@@ -139,12 +151,14 @@ def atualizar_usuario_route(
         )
 
 
-# Deleta um usuário
-
+# Deleta um usuário: somente Administrador
 @usuario_router.delete("/usuarios/{usuario_id}")
 def deletar_usuario_route(
     usuario_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario_atual: UsuarioAutenticado = Depends(
+        require_roles("Administrador")
+    )
 ):
     try:
         deletar_usuario(

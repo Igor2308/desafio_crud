@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
 
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
 from db.db import get_db
-
 from entidades.models import Emprestimo
+from dependencies.auth import require_roles
 
 from controllers.emprestimo_controller import (
     cadastrar_emprestimo,
@@ -14,46 +14,44 @@ from controllers.emprestimo_controller import (
     deletar_emprestimo
 )
 
+
 emprestimo_router = APIRouter()
 
 
-# Cadastra um novo empréstimo
-
+# Cadastra um empréstimo
 @emprestimo_router.post("/emprestimos")
 def cadastro_emprestimo(
     emprestimo: Emprestimo,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario=Depends(require_roles("Gestor"))
 ):
     try:
-        return cadastrar_emprestimo(
-            emprestimo,
-            db
-        )
+        return cadastrar_emprestimo(emprestimo, db)
 
     except KeyError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
-        )
+        ) from e
 
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
-        )
+        ) from e
 
     except RuntimeError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
-        )
+        ) from e
 
 
-# Busca todos os empréstimos
-
+# Lista empréstimos
 @emprestimo_router.get("/emprestimos")
 def buscar_emprestimos_route(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario=Depends(require_roles("Gestor"))
 ):
     try:
         return buscar_emprestimos(db)
@@ -62,42 +60,39 @@ def buscar_emprestimos_route(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
-        )
+        ) from e
 
 
 # Busca um empréstimo pelo ID
-
 @emprestimo_router.get("/emprestimos/{emprestimo_id}")
 def buscar_emprestimo_route(
     emprestimo_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario=Depends(require_roles("Gestor"))
 ):
     try:
-        return buscar_emprestimo(
-            db,
-            emprestimo_id
-        )
+        return buscar_emprestimo(db, emprestimo_id)
 
     except KeyError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
-        )
+        ) from e
 
     except RuntimeError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
-        )
+        ) from e
 
 
-# Atualiza um empréstimo
-
+# Atualiza um empréstimo, incluindo o registro da devolução
 @emprestimo_router.put("/emprestimos/{emprestimo_id}")
 def atualizar_emprestimo_route(
     emprestimo_id: int,
     emprestimo: Emprestimo,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario=Depends(require_roles("Gestor"))
 ):
     try:
         return atualizar_emprestimo(
@@ -110,33 +105,30 @@ def atualizar_emprestimo_route(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
-        )
+        ) from e
 
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
-        )
+        ) from e
 
     except RuntimeError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
-        )
+        ) from e
 
 
-# Deleta um empréstimo
-
+# Exclui um empréstimo
 @emprestimo_router.delete("/emprestimos/{emprestimo_id}")
 def deletar_emprestimo_route(
     emprestimo_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario=Depends(require_roles("Gestor"))
 ):
     try:
-        deletar_emprestimo(
-            db,
-            emprestimo_id
-        )
+        deletar_emprestimo(db, emprestimo_id)
 
         return {
             "mensagem": "Empréstimo deletado com sucesso."
@@ -146,16 +138,16 @@ def deletar_emprestimo_route(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
-        )
+        ) from e
 
     except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_409_CONFLICT,
             detail=str(e)
-        )
+        ) from e
 
     except RuntimeError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
-        )
+        ) from e

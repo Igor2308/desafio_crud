@@ -1,3 +1,4 @@
+
 from sqlmodel import Session, select
 
 from entidades.models import (
@@ -10,15 +11,12 @@ from entidades.models import (
 from sqlalchemy.exc import OperationalError, IntegrityError
 
 
-# Cadastra um novo empréstimo no banco de dados
-
+# Cadastra um novo empréstimo
 def cadastrar_emprestimo(
     emprestimo_data: Emprestimo,
     db: Session
 ):
-
     try:
-
         # Verifica se o usuário existe
         usuario = db.get(
             Usuario,
@@ -26,7 +24,6 @@ def cadastrar_emprestimo(
         )
 
         if not usuario:
-
             raise KeyError(
                 f"Usuário de ID "
                 f"{emprestimo_data.id_usuario} não encontrado."
@@ -39,18 +36,23 @@ def cadastrar_emprestimo(
         )
 
         if not solicitacao:
-
             raise KeyError(
                 f"Solicitação de ID "
                 f"{emprestimo_data.id_solicitacao} não encontrada."
             )
 
-        # O empréstimo só pode ser criado para uma solicitação aprovada
+        # Exige que a solicitação esteja aprovada
         if solicitacao.situacao != "aprovado":
-
             raise ValueError(
                 "Não é possível criar o empréstimo, "
                 "pois a solicitação não está aprovada."
+            )
+
+        # Confere se o usuário corresponde ao solicitante
+        if solicitacao.id_solicitante != emprestimo_data.id_usuario:
+            raise ValueError(
+                "O usuário informado no empréstimo "
+                "não corresponde ao solicitante da solicitação."
             )
 
         # Verifica se o equipamento existe
@@ -60,7 +62,6 @@ def cadastrar_emprestimo(
         )
 
         if not equipamento:
-
             raise KeyError(
                 f"Equipamento de ID "
                 f"{emprestimo_data.id_equipamento} não encontrado."
@@ -68,16 +69,13 @@ def cadastrar_emprestimo(
 
         # Verifica se o equipamento está disponível
         if equipamento.status_equipamento != "disponivel":
-
             raise ValueError(
                 "Não é possível realizar o empréstimo, "
                 "pois o equipamento não está disponível."
             )
 
-        # Verifica se o equipamento do empréstimo
-        # é o mesmo equipamento da solicitação
+        # Confere se o equipamento corresponde à solicitação
         if solicitacao.id_equipamento != emprestimo_data.id_equipamento:
-
             raise ValueError(
                 "O equipamento informado no empréstimo "
                 "não corresponde ao equipamento da solicitação."
@@ -92,25 +90,21 @@ def cadastrar_emprestimo(
 
         # Atualiza o status do equipamento
         equipamento.status_equipamento = "emprestado"
-
         db.add(equipamento)
 
         db.commit()
-
         db.refresh(emprestimo)
 
         return emprestimo
 
     except OperationalError as e:
-
         db.rollback()
 
         raise RuntimeError(
-            "Falha na conexão com o banco de dados"
+            "Falha na conexão com o banco de dados."
         ) from e
 
     except IntegrityError as e:
-
         db.rollback()
 
         raise ValueError(
@@ -118,41 +112,34 @@ def cadastrar_emprestimo(
         ) from e
 
 
-# Busca todos os empréstimos cadastrados
-
+# Busca todos os empréstimos
 def buscar_emprestimos(db: Session):
-
     try:
-
         statement = select(Emprestimo)
-
         emprestimos = db.exec(statement).all()
 
         return emprestimos
 
     except OperationalError as e:
+        db.rollback()
 
         raise RuntimeError(
-            "Falha na conexão com o banco de dados"
+            "Falha na conexão com o banco de dados."
         ) from e
 
 
 # Busca um empréstimo pelo ID
-
 def buscar_emprestimo(
     db: Session,
     emprestimo_id: int
 ):
-
     try:
-
         emprestimo = db.get(
             Emprestimo,
             emprestimo_id
         )
 
         if not emprestimo:
-
             raise KeyError(
                 f"Empréstimo de ID "
                 f"{emprestimo_id} não encontrado."
@@ -161,24 +148,20 @@ def buscar_emprestimo(
         return emprestimo
 
     except OperationalError as e:
-
         db.rollback()
 
         raise RuntimeError(
-            "Falha na conexão com o banco de dados"
+            "Falha na conexão com o banco de dados."
         ) from e
 
 
 # Atualiza um empréstimo existente
-
 def atualizar_emprestimo(
     db: Session,
     emprestimo_id: int,
     dados_atualizados: Emprestimo
 ):
-
     try:
-
         # Busca o empréstimo pelo ID
         emprestimo = db.get(
             Emprestimo,
@@ -186,7 +169,6 @@ def atualizar_emprestimo(
         )
 
         if not emprestimo:
-
             raise KeyError(
                 f"Empréstimo de ID "
                 f"{emprestimo_id} não encontrado."
@@ -196,91 +178,125 @@ def atualizar_emprestimo(
             exclude_unset=True
         )
 
-        # Verifica o usuário caso ele tenha sido alterado
-        if "id_usuario" in emprestimo_data:
+        # Impede alterar o identificador do empréstimo
+        emprestimo_data.pop("id_emprestimo", None)
 
-            usuario = db.get(
-                Usuario,
-                emprestimo_data["id_usuario"]
+        # Calcula os vínculos finais, considerando
+        # tanto os dados existentes quanto os recebidos
+        usuario_id = emprestimo_data.get(
+            "id_usuario",
+            emprestimo.id_usuario
+        )
+
+        solicitacao_id = emprestimo_data.get(
+            "id_solicitacao",
+            emprestimo.id_solicitacao
+        )
+
+        equipamento_id = emprestimo_data.get(
+            "id_equipamento",
+            emprestimo.id_equipamento
+        )
+
+        # Verifica se o usuário existe
+        usuario = db.get(Usuario, usuario_id)
+
+        if not usuario:
+            raise KeyError(
+                f"Usuário de ID {usuario_id} não encontrado."
             )
 
-            if not usuario:
+        # Verifica se a solicitação existe e está aprovada
+        solicitacao = db.get(
+            Solicitacao,
+            solicitacao_id
+        )
 
-                raise KeyError(
-                    f"Usuário de ID "
-                    f"{emprestimo_data['id_usuario']} não encontrado."
-                )
-
-        # Verifica a solicitação caso tenha sido alterada
-        if "id_solicitacao" in emprestimo_data:
-
-            solicitacao = db.get(
-                Solicitacao,
-                emprestimo_data["id_solicitacao"]
+        if not solicitacao:
+            raise KeyError(
+                f"Solicitação de ID "
+                f"{solicitacao_id} não encontrada."
             )
 
-            if not solicitacao:
+        if solicitacao.situacao != "aprovado":
+            raise ValueError(
+                "A solicitação informada não está aprovada."
+            )
 
-                raise KeyError(
-                    f"Solicitação de ID "
-                    f"{emprestimo_data['id_solicitacao']} não encontrada."
-                )
+        # Confere se o usuário corresponde ao solicitante
+        if solicitacao.id_solicitante != usuario_id:
+            raise ValueError(
+                "O usuário do empréstimo deve ser "
+                "o solicitante da solicitação."
+            )
 
-            if solicitacao.situacao != "aprovado":
+        # Verifica se o equipamento existe
+        equipamento = db.get(
+            Equipamento,
+            equipamento_id
+        )
 
+        if not equipamento:
+            raise KeyError(
+                f"Equipamento de ID "
+                f"{equipamento_id} não encontrado."
+            )
+
+        # Confere se o equipamento corresponde à solicitação
+        if solicitacao.id_equipamento != equipamento_id:
+            raise ValueError(
+                "O equipamento do empréstimo deve corresponder "
+                "ao equipamento da solicitação."
+            )
+
+        # Identifica se o empréstimo está sendo devolvido
+        data_devolucao = emprestimo_data.get(
+            "data_devolucao",
+            emprestimo.data_devolucao
+        )
+
+        # Não permite usar equipamento indisponível
+        # em um empréstimo que ainda está ativo
+        if data_devolucao is None:
+            if (
+                equipamento_id != emprestimo.id_equipamento
+                and equipamento.status_equipamento != "disponivel"
+            ):
                 raise ValueError(
-                    "A solicitação informada não está aprovada."
+                    "O novo equipamento não está disponível."
                 )
-
-        # Verifica o equipamento caso tenha sido alterado
-        if "id_equipamento" in emprestimo_data:
-
-            equipamento = db.get(
-                Equipamento,
-                emprestimo_data["id_equipamento"]
-            )
-
-            if not equipamento:
-
-                raise KeyError(
-                    f"Equipamento de ID "
-                    f"{emprestimo_data['id_equipamento']} não encontrado."
-                )
+        equipamento_anterior_id = emprestimo.id_equipamento
 
         # Atualiza os campos recebidos
         for key, value in emprestimo_data.items():
+            setattr(emprestimo, key, value)
 
-            if key != "id_emprestimo":
-                setattr(emprestimo, key, value)
-
-        # Se foi informada uma devolução,
-        # o equipamento volta a ficar disponível
-        if (
-            "data_devolucao" in emprestimo_data
-            and emprestimo_data["data_devolucao"] is not None
-        ):
-
-            equipamento = db.get(
+                # Se o equipamento mudou, libera o anterior
+        if equipamento_id != equipamento_anterior_id:
+            equipamento_anterior = db.get(
                 Equipamento,
-                emprestimo.id_equipamento
+                equipamento_anterior_id
             )
 
-            if equipamento:
+            if equipamento_anterior:
+                equipamento_anterior.status_equipamento = "disponivel"
+                db.add(equipamento_anterior)
 
-                equipamento.status_equipamento = "disponivel"
-
-                db.add(equipamento)
+        # Atualiza o status do equipamento relacionado
+        if data_devolucao is not None:
+            equipamento.status_equipamento = "disponivel"
+            db.add(equipamento)
+        else:
+            equipamento.status_equipamento = "emprestado"
+            db.add(equipamento)
 
         db.add(emprestimo)
-
         db.commit()
-
         db.refresh(emprestimo)
 
         return emprestimo
 
     except IntegrityError as e:
-
         db.rollback()
 
         raise ValueError(
@@ -289,57 +305,61 @@ def atualizar_emprestimo(
         ) from e
 
     except OperationalError as e:
-
         db.rollback()
 
         raise RuntimeError(
-            "Falha na conexão com o banco de dados"
+            "Falha na conexão com o banco de dados."
         ) from e
 
 
 # Deleta um empréstimo pelo ID
-
 def deletar_emprestimo(
     db: Session,
     emprestimo_id: int
 ):
-
     try:
-
-        # Busca o empréstimo pelo ID
         emprestimo = db.get(
             Emprestimo,
             emprestimo_id
         )
 
         if not emprestimo:
-
             raise KeyError(
                 f"Empréstimo de ID "
                 f"{emprestimo_id} não encontrado."
             )
 
-        # Busca o equipamento relacionado
-        equipamento = db.get(
-            Equipamento,
-            emprestimo.id_equipamento
-        )
+        # Guarda os dados antes de excluir o registro
+        equipamento_id = emprestimo.id_equipamento
+        emprestimo_ativo = emprestimo.data_devolucao is None
 
-        # Exclui o empréstimo
         db.delete(emprestimo)
+        db.flush()
 
-        # Caso o equipamento esteja emprestado,
-        # volta para disponível
-        if equipamento:
+        # Só verifica a disponibilidade se o empréstimo
+        # excluído ainda estava ativo
+        if emprestimo_ativo:
+            equipamento = db.get(
+                Equipamento,
+                equipamento_id
+            )
 
-            equipamento.status_equipamento = "disponivel"
+            if equipamento:
+                # Confere se existe outro empréstimo ativo
+                statement = select(Emprestimo).where(
+                    Emprestimo.id_equipamento == equipamento_id,
+                    Emprestimo.data_devolucao.is_(None)
+                )
 
-            db.add(equipamento)
+                outros_emprestimos = db.exec(statement).first()
+
+                if not outros_emprestimos:
+                    equipamento.status_equipamento = "disponivel"
+                    db.add(equipamento)
 
         db.commit()
 
     except IntegrityError as e:
-
         db.rollback()
 
         raise ValueError(
@@ -348,9 +368,8 @@ def deletar_emprestimo(
         ) from e
 
     except OperationalError as e:
-
         db.rollback()
 
         raise RuntimeError(
-            "Falha na conexão com o banco de dados"
+            "Falha na conexão com o banco de dados."
         ) from e
